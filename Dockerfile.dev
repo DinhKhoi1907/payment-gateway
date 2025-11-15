@@ -1,0 +1,52 @@
+# Multi-stage build cho development
+FROM node:18-alpine AS frontend-builder
+
+WORKDIR /app/frontend
+COPY frontend/package*.json ./
+RUN npm ci
+
+COPY frontend/ ./
+RUN npm run build
+
+# Backend stage
+FROM node:18-alpine AS backend
+
+# Install curl for health checks
+RUN apk add --no-cache curl
+
+# Set working directory
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# Install all dependencies (including dev dependencies)
+RUN npm ci
+
+# Copy source code
+COPY . .
+
+# Copy built frontend
+COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
+
+# Create non-root user
+RUN addgroup -g 1001 -S nodejs
+RUN adduser -S nestjs -u 1001
+
+# Change ownership of the app directory
+RUN chown -R nestjs:nodejs /app
+USER nestjs
+
+# Expose port
+EXPOSE 3000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost:3000 || exit 1
+
+# Start the application in development mode with hot reload
+# Note: In docker-compose, volume mount .:/app will override container files
+# So package.json must exist on host machine
+WORKDIR /app
+# Ensure package.json exists before running npm
+CMD ["sh", "-c", "if [ ! -f /app/package.json ]; then echo 'ERROR: package.json not found in /app'; echo 'Current directory:'; pwd; echo 'Files in /app:'; ls -la /app | head -20; exit 1; fi && npm run start:dev"]

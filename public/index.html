@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sepay Payment Test - ReactJS SPA</title>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone@7/babel.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 40px;
+        }
+        
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .header p {
+            font-size: 1.2rem;
+            opacity: 0.9;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            padding: 30px;
+            margin-bottom: 30px;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #555;
+        }
+        
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e1e5e9;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s ease;
+        }
+        
+        .form-group input:focus, .form-group select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            width: 100%;
+            margin-top: 10px;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .response-card {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+        
+        .response-card pre {
+            background: #2d3748;
+            color: #e2e8f0;
+            padding: 15px;
+            border-radius: 8px;
+            overflow-x: auto;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+        
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .success {
+            color: #28a745;
+            font-weight: 600;
+        }
+        
+        .error {
+            color: #dc3545;
+            font-weight: 600;
+        }
+        
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+        }
+        
+        @media (max-width: 768px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .header h1 {
+                font-size: 2rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        const SepayPaymentApp = () => {
+            const [formData, setFormData] = useState({
+                orderId: 'SEPAY_TEST_' + Date.now(),
+                amount: 100000,
+                paymentMethod: 'sepay',
+                userId: '1',
+                email: 'test@example.com',
+                phone: '0123456789'
+            });
+            
+            const [response, setResponse] = useState(null);
+            const [loading, setLoading] = useState(false);
+            const [error, setError] = useState(null);
+            const [sepayFormFields, setSepayFormFields] = useState(null);
+            const [sepayPaymentUrl, setSepayPaymentUrl] = useState('');
+
+            const generateSignature = async (payload, secretKey) => {
+                const jsonPayload = JSON.stringify(payload);
+                const key = await crypto.subtle.importKey(
+                    "raw",
+                    new TextEncoder().encode(secretKey),
+                    { name: "HMAC", hash: "SHA-256" },
+                    false,
+                    ["sign"]
+                );
+                const signatureBuffer = await crypto.subtle.sign(
+                    "HMAC",
+                    key,
+                    new TextEncoder().encode(jsonPayload)
+                );
+                return Array.from(new Uint8Array(signatureBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+            };
+
+            const handleCreatePayment = async () => {
+                setLoading(true);
+                setResponse(null);
+                setError(null);
+                setSepayFormFields(null);
+                setSepayPaymentUrl('');
+
+                try {
+                    // Tạo data mẫu để submit trực tiếp tới Sepay
+                    const mockSepayData = {
+                        merchant: 'test_merchant_id',
+                        operation: 'PURCHASE',
+                        payment_method: 'BANK_TRANSFER',
+                        order_invoice_number: formData.orderId || 'ORDER_' + Date.now(),
+                        order_amount: formData.amount || 100000,
+                        currency: 'VND',
+                        order_description: `Thanh toan don hang ${formData.orderId || 'ORDER_' + Date.now()}`,
+                        customer_id: formData.userId || '1',
+                        success_url: 'http://localhost:8000/thank-you',
+                        error_url: 'http://localhost:8000/error',
+                        cancel_url: 'http://localhost:8000/cancel',
+                        custom_data: JSON.stringify({
+                            user_id: formData.userId || '1',
+                            email: formData.email || 'test@example.com',
+                            phone: formData.phone || '0123456789',
+                        }),
+                        signature: 'mock_signature_' + Date.now(), // Mock signature
+                    };
+
+                    console.log('Mock Sepay data:', mockSepayData);
+                    
+                    setResponse({
+                        payment_url: 'https://pgapi-sandbox.sepay.vn',
+                        transaction_id: mockSepayData.order_invoice_number,
+                        status: 'pending',
+                        form_fields: mockSepayData
+                    });
+
+                    setSepayPaymentUrl('https://pgapi-sandbox.sepay.vn');
+                    setSepayFormFields(mockSepayData);
+
+                } catch (err) {
+                    console.error('Payment creation error:', err);
+                    setError('Failed to create payment');
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const handleSubmitToSepay = () => {
+                if (sepayPaymentUrl && sepayFormFields) {
+                    const form = document.createElement('form');
+                    form.method = 'POST';
+                    form.action = sepayPaymentUrl;
+                    form.target = '_blank';
+                    
+                    for (const key in sepayFormFields) {
+                        const input = document.createElement('input');
+                        input.type = 'hidden';
+                        input.name = key;
+                        input.value = sepayFormFields[key];
+                        form.appendChild(input);
+                    }
+                    
+                    document.body.appendChild(form);
+                    form.submit();
+                    document.body.removeChild(form);
+                }
+            };
+
+            const handleInputChange = (e) => {
+                const { name, value } = e.target;
+                setFormData(prev => ({
+                    ...prev,
+                    [name]: value
+                }));
+            };
+
+            return (
+                <div className="container">
+                    <div className="header">
+                        <h1>🏦 Sepay Payment Test</h1>
+                        <p>ReactJS SPA - Test Sepay Payment Integration</p>
+                    </div>
+
+                    <div className="grid">
+                        <div className="card">
+                            <h2>📝 Payment Form</h2>
+                            <form onSubmit={(e) => { e.preventDefault(); handleCreatePayment(); }}>
+                                <div className="form-group">
+                                    <label>Order ID:</label>
+                                    <input
+                                        type="text"
+                                        name="orderId"
+                                        value={formData.orderId}
+                                        onChange={handleInputChange}
+                                        required
+                                    />
+                                </div>
+
+                                <div className="form-group">
+                                    <label>Amount (VND):</label>
+                                    <input
+                                        type="number"
+                                        name="amount"
+                                        value={formData.amount}
+                                        onChange={handleInputChange}
+                                        required
+                                    />
+                                </div>
+
+                                <div className="form-group">
+                                    <label>Payment Method:</label>
+                                    <select
+                                        name="paymentMethod"
+                                        value={formData.paymentMethod}
+                                        onChange={handleInputChange}
+                                    >
+                                        <option value="sepay">Sepay (Bank Transfer)</option>
+                                        <option value="momo">MoMo</option>
+                                        <option value="paypal">PayPal</option>
+                                    </select>
+                                </div>
+
+                                <div className="form-group">
+                                    <label>User ID:</label>
+                                    <input
+                                        type="text"
+                                        name="userId"
+                                        value={formData.userId}
+                                        onChange={handleInputChange}
+                                        required
+                                    />
+                                </div>
+
+                                <div className="form-group">
+                                    <label>Email:</label>
+                                    <input
+                                        type="email"
+                                        name="email"
+                                        value={formData.email}
+                                        onChange={handleInputChange}
+                                        required
+                                    />
+                                </div>
+
+                                <div className="form-group">
+                                    <label>Phone:</label>
+                                    <input
+                                        type="text"
+                                        name="phone"
+                                        value={formData.phone}
+                                        onChange={handleInputChange}
+                                        required
+                                    />
+                                </div>
+
+                                <button type="submit" className="btn" disabled={loading}>
+                                    {loading ? (
+                                        <>
+                                            <span className="loading"></span>
+                                            Creating Payment...
+                                        </>
+                                    ) : (
+                                        '🚀 Create Payment'
+                                    )}
+                                </button>
+                            </form>
+                        </div>
+
+                        <div className="card">
+                            <h2>📊 Response</h2>
+                            
+                            {error && (
+                                <div className="error">
+                                    ❌ Error: {error}
+                                </div>
+                            )}
+
+                            {response && (
+                                <div className="response-card">
+                                    <h3>API Response:</h3>
+                                    <pre>{JSON.stringify(response, null, 2)}</pre>
+                                </div>
+                            )}
+
+                            {sepayPaymentUrl && sepayFormFields && (
+                                <div className="response-card">
+                                    <h3>✅ Payment Created Successfully!</h3>
+                                    <p><strong>Payment URL:</strong> {sepayPaymentUrl}</p>
+                                    <p><strong>Form Fields:</strong></p>
+                                    <pre>{JSON.stringify(sepayFormFields, null, 2)}</pre>
+                                    
+                                    <button 
+                                        onClick={handleSubmitToSepay}
+                                        className="btn"
+                                        style={{ background: 'linear-gradient(135deg, #28a745 0%, #20c997 100%)' }}
+                                    >
+                                        🏦 Submit to Sepay
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        ReactDOM.render(<SepayPaymentApp />, document.getElementById('root'));
+    </script>
+</body>
+</html>

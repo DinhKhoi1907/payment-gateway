@@ -1,0 +1,149 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    build:
+      context: ./docker/postgres
+      dockerfile: Dockerfile
+    container_name: payment-postgres
+    environment:
+      POSTGRES_DB: ${DB_DATABASE:-payment_db}
+      POSTGRES_USER: ${DB_USERNAME:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres123}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./logs/postgres:/var/log/postgresql
+    networks:
+      - payment-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-postgres} -d ${DB_DATABASE:-payment_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # NestJS Application
+  payment-services:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: payment-services
+    working_dir: /app
+    extra_hosts:
+      - "laravel-app:172.19.0.1"
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      PORT: ${PORT:-3000}
+      DB_HOST: postgres
+      DB_PORT: ${DB_PORT:-5432}
+      DB_USERNAME: ${DB_USERNAME:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-postgres123}
+      DB_DATABASE: ${DB_DATABASE:-payment_db}
+      DATABASE_URL: postgresql://${DB_USERNAME:-postgres}:${DB_PASSWORD:-postgres123}@postgres:${DB_PORT:-5432}/${DB_DATABASE:-payment_db}
+      # Laravel Integration
+      LARAVEL_SECRET_KEY: ${LARAVEL_SECRET_KEY:-1c433c40ad53058f8c145a34570aed3e023343b72856912b8e30904d29928436}
+      LARAVEL_CALLBACK_URL: ${LARAVEL_CALLBACK_URL:-http://host.docker.internal:8000/api/payment/callback}
+      LARAVEL_URL: ${LARAVEL_URL:-http://host.docker.internal:8000}
+      NESTJS_URL: ${NESTJS_URL:-https://payment-gateway.dinhkhoi.io.vn}
+      IDEMPOTENCY_TTL_MINUTES: ${IDEMPOTENCY_TTL_MINUTES:-10}
+      # PayPal Configuration
+      PAYPAL_API_URL: ${PAYPAL_API_URL:-https://api.sandbox.paypal.com}
+      PAYPAL_CLIENT_ID: ${PAYPAL_CLIENT_ID:-}
+      PAYPAL_CLIENT_SECRET: ${PAYPAL_CLIENT_SECRET:-}
+      PAYPAL_VND_TO_USD_RATE: ${PAYPAL_VND_TO_USD_RATE:-23000}
+      # Sepay Configuration
+      SEPAY_API_URL: ${SEPAY_API_URL:-https://api.sepay.com}
+      SEPAY_MERCHANT_ID: ${SEPAY_MERCHANT_ID:-test_merchant_id}
+      SEPAY_SECRET_KEY: ${SEPAY_SECRET_KEY:-test_secret_key}
+    ports:
+      - "${PORT:-3000}:3000"
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - ./logs/app:/app/logs
+      - ./.env:/app/.env
+    networks:
+      - payment-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # React Frontend Development Server
+  frontend:
+    image: node:18-alpine
+    container_name: payment-frontend
+    working_dir: /app/frontend
+    command: sh -c "npm ci && npm run dev -- --host 0.0.0.0"
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app/frontend
+      - /app/frontend/node_modules
+    environment:
+      - NODE_ENV=development
+      - VITE_API_URL=http://localhost:3000
+    networks:
+      - payment-network
+    depends_on:
+      - payment-services
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:5173"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Nginx Reverse Proxy
+  nginx:
+    build:
+      context: ./docker/nginx
+      dockerfile: Dockerfile
+    container_name: payment-nginx
+    ports:
+      - "${NGINX_PORT:-80}:80"
+    volumes:
+      - ./logs/nginx:/var/log/nginx
+    networks:
+      - payment-network
+    depends_on:
+      payment-services:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # cloudflared:
+  #   image: cloudflare/cloudflared:latest
+  #   container_name: payment-cloudflared
+  #   depends_on:
+  #     payment-services:
+  #       condition: service_healthy
+  #   command: tunnel --config /etc/cloudflared/config.yml run
+  #   volumes:
+  #     - /Users/macbook/.cloudflared:/etc/cloudflared
+  #   restart: unless-stopped
+  #   networks:
+  #     - payment-network
+
+
+# Volumes
+volumes:
+  postgres_data:
+    driver: local
+
+# Networks
+networks:
+  payment-network:
+    driver: bridge
