@@ -6,6 +6,7 @@
   "private": true,
   "license": "UNLICENSED",
   "scripts": {
+    "prebuild": "npm run build:frontend",
     "build": "nest build",
     "build:frontend": "cd frontend && npm ci && npm run build",
     "build:all": "./build.sh",
