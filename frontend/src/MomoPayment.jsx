@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { getLaravelUrl } from './utils/env';
 
 const MomoPayment = () => {
   const [formData, setFormData] = useState({
@@ -33,7 +34,7 @@ const MomoPayment = () => {
           email: formData.email || 'test@example.com',
           phone: formData.phone || '0123456789',
         },
-        return_url: 'http://localhost:8000/thank-you',
+        return_url: `${getLaravelUrl()}/thank-you`,
       };
 
       console.log('MoMo API Request:', requestData);

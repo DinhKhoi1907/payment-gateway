@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
+import { getLaravelUrl } from './utils/env';
 
 function useQuery() {
   return React.useMemo(() => new URLSearchParams(window.location.search), []);
@@ -14,13 +15,6 @@ export default function PayPalPayment() {
   const [countdown, setCountdown] = useState(null);
   const paypalButtonContainerRef = useRef(null);
   const paypalButtonsRenderedRef = useRef(false);
-
-  const getLaravelUrl = () => {
-    if (typeof window !== 'undefined' && window.env && window.env.LARAVEL_URL) {
-      return window.env.LARAVEL_URL;
-    }
-    return import.meta.env.VITE_LARAVEL_URL || 'http://localhost:8000';
-  };
 
   // Load payment status by paymentId and use server values
   useEffect(() => {

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { getLaravelUrl } from './utils/env';
 
 function useQuery() {
   return useMemo(() => new URLSearchParams(window.location.search), []);
@@ -17,15 +18,8 @@ export default function SepayConfirm() {
   const [checkoutUrl, setCheckoutUrl] = useState('');
   const [amount, setAmount] = useState(0);
   const [currency, setCurrency] = useState('VND');
-  const [countdown, setCountdown] = useState(null);
+  const [countdown, setCountdown] = useState(null);kh
   const [expiresAt, setExpiresAt] = useState(null);
-
-  const getLaravelUrl = () => {
-    if (typeof window !== 'undefined' && window.env && window.env.LARAVEL_URL) {
-      return window.env.LARAVEL_URL;
-    }
-    return import.meta.env.VITE_LARAVEL_URL || 'http://localhost:8000';
-  };
 
   const getThankYouUrl = () => {
     const laravelUrl = getLaravelUrl();
