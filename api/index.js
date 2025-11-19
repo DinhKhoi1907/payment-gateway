@@ -12,8 +12,7 @@ async function createApp() {
 
   try {
     // Dynamic import for ES modules
-    const { AppModule } = await import('../dist/app.module.js');
-    
+    const { AppModule } = await import('../dist/src/app.module.js');
     const expressApp = express();
     const adapter = new ExpressAdapter(expressApp);
     const app = await NestFactory.create(AppModule, adapter);
@@ -30,7 +29,7 @@ async function createApp() {
       app.useStaticAssets(join(frontendDistPath, 'assets'), {
         prefix: '/assets',
       });
-    } catch (error) {
+    } catch (_error) {
       console.warn('Static assets not found, skipping...');
     }
 
@@ -54,4 +53,3 @@ module.exports = async (req, res) => {
     res.status(500).json({ error: 'Internal Server Error' });
   }
 };
-
