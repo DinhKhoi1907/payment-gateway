@@ -8,7 +8,7 @@
   "scripts": {
     "prebuild": "npm run build:frontend",
     "build": "nest build",
-    "build:frontend": "cd frontend && npm ci && npm run build",
+    "build:frontend": "cd frontend && npm ci --include=dev && npm run build",
     "build:all": "./build.sh",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
