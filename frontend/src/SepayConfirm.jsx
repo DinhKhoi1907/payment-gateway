@@ -18,7 +18,7 @@ export default function SepayConfirm() {
   const [checkoutUrl, setCheckoutUrl] = useState('');
   const [amount, setAmount] = useState(0);
   const [currency, setCurrency] = useState('VND');
-  const [countdown, setCountdown] = useState(null);kh
+  const [countdown, setCountdown] = useState(null);
   const [expiresAt, setExpiresAt] = useState(null);
 
   const getThankYouUrl = () => {
